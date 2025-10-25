@@ -1,0 +1,266 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>SupplyScore - Home</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='core/css/style.css') }}" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="bg-particles" aria-hidden="true">
+    <span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span>
+</div>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <div class="container">
+    <a class="navbar-brand" href="{{ url_for('core.home') }}">
+      <svg class="brand-icon" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#c084fc"/>
+            <stop offset="100%" stop-color="#6d28d9"/>
+          </linearGradient>
+        </defs>
+        <circle cx="16" cy="16" r="14" fill="url(#g1)" />
+        <path d="M9.5 17.5c2.8-1.2 4.9-3.7 6.1-6.6 1.3 3.4 3.8 6.3 7 8.1l-2.3 2.3c-2.9-1.5-5.2-3.7-6.8-6.5-1.2 1.6-2.8 2.9-4.6 3.8l-1.4-1.1z" fill="#fff" opacity="0.9"/>
+      </svg>
+      <span class="brand-mark">SupplyScore</span>
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto">
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('core.home') }}">Home</a></li>
+    {% if session.get('user_role') == 'business' %}
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('core.vendor_review') }}">Vendor Review</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('core.quote_comparison') }}">Quote Comparison</a></li>
+    {% endif %}
+    {% if session.get('user_role') == 'vendor' %}
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('core.dispute_management') }}">Dispute Management</a></li>
+    {% endif %}
+    {% if session.get('user_role') == 'admin' %}
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('core.users') }}">Users</a></li>
+    {% endif %}
+    {% if session.get('user_id') %}
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('core.logout') }}">Logout</a></li>
+    {% else %}
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('core.login') }}">Login</a></li>
+    {% endif %}
+</ul>
+
+    </div>
+  </div>
+</nav>
+
+
+<!-- Dashboard Content -->
+<div class="container">
+    <h2 class="mb-4 text-center wave-heading">Vendor & Supplier Dashboard</h2>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h5>Vendor Score Breakdown</h5>
+                <div class="chart-container">
+                    <canvas id="scoreChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h5>Monthly Transactions</h5>
+                <div class="chart-container">
+                    <canvas id="transactionChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="dashboard-card text-center">
+                <h6>Total Vendors</h6>
+                <p class="display-6 countup" data-target="25">0</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="dashboard-card text-center">
+                <h6>Total Reviews</h6>
+                <p class="display-6 countup" data-target="120">0</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="dashboard-card text-center">
+                <h6>Disputes Resolved</h6>
+                <p class="display-6 countup" data-target="15">0</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Chart.js Scripts -->
+<script>
+    // Custom shadow plugin to create a pseudo-3D depth
+    const shadowPlugin = {
+        id: 'customShadow',
+        beforeDatasetsDraw(chart, args, opts) {
+            const {ctx} = chart;
+            ctx.save();
+            ctx.shadowColor = opts.shadowColor || 'rgba(0,0,0,0.45)';
+            ctx.shadowBlur = opts.shadowBlur || 18;
+            ctx.shadowOffsetX = opts.shadowOffsetX || 0;
+            ctx.shadowOffsetY = opts.shadowOffsetY || 10;
+        },
+        afterDatasetsDraw(chart, args, opts) {
+            chart.ctx.restore();
+        }
+    };
+
+    // Utility to build vertical gradient fill
+    function verticalGradient(ctx, area, from, to) {
+        const g = ctx.createLinearGradient(0, area.top, 0, area.bottom);
+        g.addColorStop(0, from);
+        g.addColorStop(1, to);
+        return g;
+    }
+
+    // Colors aligned with the dark purple theme
+    const purple = '#6d28d9';
+    const purpleDark = '#4c1d95';
+    const teal = '#22d3ee';
+    const amber = '#f59e0b';
+    const rose = '#f43f5e';
+
+    // Score doughnut (with inner cutout and shadow to simulate depth)
+    const scoreCanvas = document.getElementById('scoreChart');
+    const scoreCtx = scoreCanvas.getContext('2d');
+    const scoreChart = new Chart(scoreCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Cost', 'Quality', 'Delivery', 'Compliance'],
+            datasets: [{
+                label: 'Vendor Scores',
+                data: [25, 35, 20, 20],
+                backgroundColor: [purple, '#8b5cf6', amber, rose],
+                borderColor: 'rgba(0,0,0,0.15)',
+                borderWidth: 1,
+                hoverOffset: 8,
+            }]
+        },
+        options: {
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        color: '#eae6ff',
+                        usePointStyle: true,
+                        pointStyle: 'roundedRect',
+                        boxWidth: 10,
+                        padding: 16
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(30, 22, 63, 0.9)',
+                    borderColor: 'rgba(192,132,252,0.25)',
+                    borderWidth: 1,
+                    titleColor: '#eae6ff',
+                    bodyColor: '#eae6ff'
+                }
+            },
+            cutout: '58%',
+            radius: '90%'
+        },
+        plugins: [shadowPlugin]
+    });
+
+    // Transactions bar with rounded corners, gradient fill, and shadow
+    const transactionCanvas = document.getElementById('transactionChart');
+    const transactionCtx = transactionCanvas.getContext('2d');
+    const transactionChart = new Chart(transactionCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+            datasets: [{
+                label: 'Transactions ($)',
+                data: [1200, 1900, 3000, 2500, 2200, 2700],
+                backgroundColor: (context) => {
+                    const {chart} = context;
+                    const {ctx, chartArea} = chart;
+                    if (!chartArea) { return purple; }
+                    return verticalGradient(ctx, chartArea, '#8b5cf6', purpleDark);
+                },
+                borderColor: 'rgba(0,0,0,0.15)',
+                borderWidth: 1,
+                borderRadius: 12,
+                maxBarThickness: 42,
+            }]
+        },
+        options: {
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#eae6ff',
+                        usePointStyle: true,
+                        pointStyle: 'roundedRect',
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(30, 22, 63, 0.9)',
+                    borderColor: 'rgba(192,132,252,0.25)',
+                    borderWidth: 1,
+                    titleColor: '#eae6ff',
+                    bodyColor: '#eae6ff'
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#eae6ff' },
+                    grid: { color: 'rgba(192,132,252,0.08)' }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: '#eae6ff' },
+                    grid: { color: 'rgba(192,132,252,0.08)' }
+                }
+            }
+        },
+        plugins: [shadowPlugin]
+    });
+
+    // Count-up animation for KPI cards
+    function animateCount(el, duration = 1200) {
+        const target = parseInt(el.getAttribute('data-target') || '0', 10);
+        const start = 0;
+        const startTime = performance.now();
+        const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+        function frame(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(1, elapsed / duration);
+            const eased = easeOutCubic(progress);
+            const current = Math.floor(start + (target - start) * eased);
+            el.textContent = current.toLocaleString();
+            if (progress < 1) requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+    }
+
+    document.querySelectorAll('.countup').forEach((el, idx) => {
+        // Stagger the animations slightly for a nicer effect
+        setTimeout(() => animateCount(el, 1200 + idx * 150), idx * 100);
+    });
+</script>
+
+</body>
+</html>
+
